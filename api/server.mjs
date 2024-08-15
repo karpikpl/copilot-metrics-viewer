@@ -50,32 +50,28 @@ const githubProxy = createProxyMiddleware({
   },
 });
 
-app.get('/assets/app-config.js', (req, res) => {
-  // get the token from the session
-  const org = req.session.org || process.env.VUE_APP_GITHUB_ORG || '';
-  const ent = process.env.VUE_APP_GITHUB_ENT || '';
-  const scope = process.env.VUE_APP_SCOPE;
+if (process.env.PUBLIC_APP) {
 
-  if (req.session.org) {
+  app.get('/assets/app-config.js', (req, res) => {
+    // get the token from the session
+    const org = req.session.org || 'tbd'
+
     const response = `
     // this is my file
     window._ENV_ = {
     VUE_APP_MOCKED_DATA: "",
-    VUE_APP_SCOPE: "${scope}",
+    VUE_APP_SCOPE: "organization",
     VUE_APP_GITHUB_ORG: "${org}",
-    VUE_APP_GITHUB_ENT: "${ent}",
+    VUE_APP_GITHUB_ENT: "",
     VUE_APP_GITHUB_TOKEN: "",
     VUE_APP_GITHUB_API: "/api/github",
   };`;
+
     res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Cache-Control', 'no-store');
     res.send(response);
-  } else {
-    // send the file
-    res.sendFile(path.join(__dirname, 'public', 'assets', 'app-config.js'));
-  }
-
-});
+  });
+}
 
 // Apply middlewares to the app
 app.use('/api/github', authMiddleware, githubProxy);
@@ -109,7 +105,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/login', (req, res) => {
   // build the URL to redirect to GitHub using host and scheme
-  const redirectUrl = `${req.protocol}://${req.get('host')}/callback`;
+  // use http only for localhost
+  protocol = req.get('host') == 'localhost' ? 'http' : 'https';
+
+  const redirectUrl = `${protocol}://${req.get('host')}/callback`;
   // generate random state
   // store the state in the session
   req.session.state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -135,7 +134,8 @@ app.get('/callback', async (req, res) => {
     // Store the token in the session
     req.session.token = token;
 
-    if (!process.env.VUE_APP_GITHUB_ORG) {
+    // only for public app deployments serving many orgs
+    if (process.env.PUBLIC_APP) {
       // here when if we don't have the org - we take it from the user's orgs
 
       const orgsResponse = await axios.get('https://api.github.com/user/orgs', {
