@@ -50,6 +50,33 @@ const githubProxy = createProxyMiddleware({
   },
 });
 
+app.get('/assets/app-config.js', (req, res) => {
+  // get the token from the session
+  const org = req.session.org || process.env.VUE_APP_GITHUB_ORG || '';
+  const ent = process.env.VUE_APP_GITHUB_ENT || '';
+  const scope = process.env.VUE_APP_SCOPE;
+
+  if (req.session.org) {
+    const response = `
+    // this is my file
+    window._ENV_ = {
+    VUE_APP_MOCKED_DATA: "",
+    VUE_APP_SCOPE: "${scope}",
+    VUE_APP_GITHUB_ORG: "${org}",
+    VUE_APP_GITHUB_ENT: "${ent}",
+    VUE_APP_GITHUB_TOKEN: "",
+    VUE_APP_GITHUB_API: "/api/github",
+  };`;
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(response);
+  } else {
+    // send the file
+    res.sendFile(path.join(__dirname, 'public', 'assets', 'app-config.js'));
+  }
+
+});
+
 // Apply middlewares to the app
 app.use('/api/github', authMiddleware, githubProxy);
 
@@ -107,6 +134,22 @@ app.get('/callback', async (req, res) => {
 
     // Store the token in the session
     req.session.token = token;
+
+    if (!process.env.VUE_APP_GITHUB_ORG) {
+      // here when if we don't have the org - we take it from the user's orgs
+
+      const orgsResponse = await axios.get('https://api.github.com/user/orgs', {
+        headers: {
+          Authorization: `token ${token}`
+        }
+      });
+
+      const organizations = orgsResponse.data;
+      if (organizations.length > 0) {
+        const org = organizations[0].login; // Use the first organization login name
+        req.session.org = org;
+      }
+    }
 
     // redirect to the Vue app with the user's information
     res.redirect(`/`);
