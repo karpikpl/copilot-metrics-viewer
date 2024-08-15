@@ -106,7 +106,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/login', (req, res) => {
   // build the URL to redirect to GitHub using host and scheme
   // use http only for localhost
-  protocol = req.get('host') == 'localhost' ? 'http' : 'https';
+  const protocol = req.get('host') == 'localhost' ? 'http' : 'https';
 
   const redirectUrl = `${protocol}://${req.get('host')}/callback`;
   // generate random state
