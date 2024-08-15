@@ -148,6 +148,9 @@ app.get('/callback', async (req, res) => {
       if (organizations.length > 0) {
         const org = organizations[0].login; // Use the first organization login name
         req.session.org = org;
+      } else {
+        res.send('No organizations found - Install the app on an organization');
+        return;
       }
     }
 
