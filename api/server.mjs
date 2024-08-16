@@ -4,7 +4,10 @@ import path from 'path';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
 import session from 'express-session';
+import appInsights from 'applicationinsights';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+
+appInsights.setup().start();
 
 // Construct __dirname equivalent in ES module scope
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
