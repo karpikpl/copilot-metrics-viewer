@@ -148,7 +148,9 @@ app.get('/callback', async (req, res) => {
 
       const orgsResponse = await axios.get('https://api.github.com/user/orgs', {
         headers: {
-          Authorization: `token ${token}`
+          Authorization: `token ${token}`,
+          Accept: application/vnd.github+json,
+          'X-GitHub-Api-Version': '2022-11-28'
         }
       });
 
@@ -162,7 +164,7 @@ app.get('/callback', async (req, res) => {
         const org = organizations[0].login; // Use the first organization login name
         req.session.org = org;
       } else {
-        res.send('No organizations found - Install the app on an organization: '+ JSON.stringify(orgsResponse));
+        res.send('No organizations found - Install the app on an organization: '+ JSON.stringify(organizations) + ' - ' + token);
         return;
       }
     }
