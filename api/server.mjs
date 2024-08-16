@@ -152,7 +152,7 @@ app.get('/callback', async (req, res) => {
       const orgsResponse = await axios.get('https://api.github.com/user/orgs', {
         headers: {
           Authorization: `token ${token}`,
-          Accept: application/vnd.github+json,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28'
         }
       });
