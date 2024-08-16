@@ -30,10 +30,10 @@ const authMiddleware = (req, res, next) => {
 
   if (process.env.VUE_APP_GITHUB_TOKEN) {
     // Use the hardcoded token if it's available
-    req.session.token = process.env.VUE_APP_GITHUB_TOKEN;
+    req.session.token = { access_token: process.env.VUE_APP_GITHUB_TOKEN };
   }
 
-  req.headers['Authorization'] = `Bearer ${req.session.token}`;
+  req.headers['Authorization'] = `Bearer ${req.session.token.access_token}`;
   console.log('Added Authorization to:', req.url);
   next();
 };
@@ -106,7 +106,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/login', (req, res) => {
   // build the URL to redirect to GitHub using host and scheme
   // use http only for localhost
-  const protocol = req.get('host') == 'localhost' ? 'http' : 'https';
+  const protocol = req.hostname == 'localhost' ? 'http' : 'https';
 
   const redirectUrl = `${protocol}://${req.get('host')}/callback`;
   // generate random state
@@ -119,6 +119,13 @@ app.get('/login', (req, res) => {
 app.get('/callback', async (req, res) => {
   const code = req.query.code;
   const state = req.query.state;
+  const error = req.query.error;
+  const errorDescription = req.query.error_description;
+
+  if (error) {
+    res.send(`Error: ${error} - ${errorDescription}`);
+    return;
+  }
 
   // check the state against the session
   if (state !== req.session.state) {
@@ -132,7 +139,8 @@ app.get('/callback', async (req, res) => {
     const token = tokenData.access_token;
 
     // Store the token in the session
-    req.session.token = token;
+    req.session.token = tokenData;
+    req.session.expires = Date.now() + tokenData.expires_in * 1000;
 
     // only for public app deployments serving many orgs
     if (process.env.PUBLIC_APP) {
@@ -144,12 +152,17 @@ app.get('/callback', async (req, res) => {
         }
       });
 
+      if(orgsResponse.status !== 200) {
+        res.send('Error fetching organizations');
+        return;
+      }
+
       const organizations = orgsResponse.data;
       if (organizations.length > 0) {
         const org = organizations[0].login; // Use the first organization login name
         req.session.org = org;
       } else {
-        res.send('No organizations found - Install the app on an organization');
+        res.send('No organizations found - Install the app on an organization: '+ JSON.stringify(orgsResponse));
         return;
       }
     }
