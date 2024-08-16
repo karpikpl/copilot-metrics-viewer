@@ -3,7 +3,7 @@ name: Build and push Docker image for Proxy
 on:
   push:
     branches:
-      - main
+      - feature/gh-app
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -11,9 +11,15 @@ on:
 permissions:
   packages: write
 
+env:
+  IMAGE_NAME: "${GITHUB_REPO,,}-with-proxy-public"
+
 jobs:
   push_to_ghcr:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.save_tag.outputs.tag }}
+    
     steps:
       - name: Checkout GitHub Action
         uses: actions/checkout@v4
@@ -25,11 +31,78 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push Docker Image
-        run: |
-          GITHUB_REPO="${GITHUB_REPO,,}-with-proxy-public"  # convert repo name to lowercase as required by docker
-          echo "building docker image in repository '$GITHUB_REPO' ..."
-          docker build -f api.Dockerfile --label "org.opencontainers.image.title=copilot-metrics-viewer-with-proxy" --label "org.opencontainers.image.description=Metrics viewer with proxy for GitHub Copilot usage" --label "org.opencontainers.image.source=$GITHUB_REPO" -t ghcr.io/$GITHUB_REPO:latest .
-          docker push ghcr.io/$GITHUB_REPO:latest
-        env:
-          GITHUB_REPO: ${{ github.repository }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.title=copilot-metrics-viewer-with-proxy
+            org.opencontainers.image.source=Copilot Metrics Viewer with Proxy
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Save image tag
+        uses: actions/github-script@v7
+        id: save_tag
+        with:
+          script: |
+            const metadata = JSON.parse('${{ steps.meta.outputs.json }}');
+            const cr = 'ghcr.io/';
+            const branchName = '${{ github.ref }}'.replace('refs/heads/', '').replace('/', '-');  
+            const tagSha = metadata.tags.find(tag => tag.includes(':sha-'));
+            // here's the deal, we have multiple tags, one is always sha
+            // other one might be a branch name, or a PR number, or a semver
+            // we want to avoid using the branch name tag, as it will be overwritten
+            const otherTag = metadata.tags.find(tag => tag != tagSha && !tag.endsWith(branchName));
+            // if we othet tag, use that
+            tagToUse = otherTag ? otherTag : tagSha;
+            const tagWithoutcr = tagToUse.replace(cr, '');
+            console.log(tagWithoutcr);
+            var json = JSON.stringify(metadata, null, 2);
+            await core.summary
+              .addHeading('Image Version')
+              .addRaw('Image created with tag: **' + tagWithoutcr + '**', true)
+              .addCodeBlock(json, "json")
+              .write()
+
+            core.setOutput('tag', tagWithoutcr);
+
+      - name: Upload image metadata
+        uses: actions/upload-artifact@v3
+        with:
+          name: image-metadata
+          path: metadata.json
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: api.Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+
+
+  deploy_to_azure:
+    runs-on: ubuntu-latest
+    needs: push_to_ghcr
+    steps:
+      - name: Checkout GitHub Action
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_APP_NAME }}
+          images: ghcr.io/${{ needs.push_to_ghcr.outputs.tag }}
