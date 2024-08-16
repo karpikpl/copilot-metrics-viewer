@@ -70,6 +70,7 @@ if (process.env.PUBLIC_APP) {
     VUE_APP_GITHUB_TOKEN: "",
     VUE_APP_GITHUB_API: "/api/github",
     VUE_APP_GITHUB_ORGS: "${orgs}",
+    VUE_APP_GITHUB_TEAM: "${process.env.VUE_APP_GITHUB_TEAM}"
   };`;
 
     res.setHeader('Content-Type', 'application/javascript');
