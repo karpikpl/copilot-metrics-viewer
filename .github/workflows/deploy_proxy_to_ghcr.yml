@@ -72,6 +72,10 @@ jobs:
 
             core.setOutput('tag', tagWithoutcr);
 
+      - name: Save metadata
+        shell: bash
+        run: echo '${{ steps.meta.outputs.json }}' | jq . > metadata.json
+
       - name: Upload image metadata
         uses: actions/upload-artifact@v3
         with:
