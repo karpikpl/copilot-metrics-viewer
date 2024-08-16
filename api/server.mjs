@@ -116,7 +116,7 @@ app.get('/login', (req, res) => {
   // store the state in the session
   req.session.state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-  res.redirect(`https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${redirectUrl}&state=${req.session.state}`);
+  res.redirect(`https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${redirectUrl}&state=${req.session.state}&scope=read:org,manage_billing:copilot`);
 });
 
 app.get('/callback', async (req, res) => {
