@@ -57,7 +57,8 @@ if (process.env.PUBLIC_APP) {
 
   app.get('/assets/app-config.js', (req, res) => {
     // get the token from the session
-    const org = req.session.org || 'tbd'
+    const org = req.session.org || ''
+    const orgs = req.session.orgs || ''
 
     const response = `
     // this is my file
@@ -68,6 +69,7 @@ if (process.env.PUBLIC_APP) {
     VUE_APP_GITHUB_ENT: "",
     VUE_APP_GITHUB_TOKEN: "",
     VUE_APP_GITHUB_API: "/api/github",
+    VUE_APP_GITHUB_ORGS: "${orgs}",
   };`;
 
     res.setHeader('Content-Type', 'application/javascript');
@@ -124,9 +126,17 @@ app.get('/callback', async (req, res) => {
   const state = req.query.state;
   const error = req.query.error;
   const errorDescription = req.query.error_description;
+  const installationId = req.query.installation_id;
+  const setupAction = req.query.setup_action;
 
   if (error) {
     res.send(`Error: ${error} - ${errorDescription}`);
+    return;
+  }
+
+  if(installationId && setupAction== 'install') {
+    console.log(`Redirecting to home after installation ${installationId}`);
+    res.redirect(`/login`);
     return;
   }
 
@@ -168,7 +178,7 @@ app.get('/callback', async (req, res) => {
       if (organizations.length > 0) {
         const org = organizations[0]; // Use the first organization login name
         req.session.org = org;
-        req.session.orgs = organizations;
+        req.session.orgs = organizations.join(',');
       } else {
 
         res.redirect(`https://github.com/apps/copilot-metrics-viewer`);
@@ -179,7 +189,9 @@ app.get('/callback', async (req, res) => {
     // redirect to the Vue app with the user's information
     res.redirect(`/`);
   } else {
-    res.send(`Authorized, but unable to exchange code ${code} for token.`);
+    const error = tokenData.error;
+    const errorDescription = tokenData.error_description;
+    res.send(`Error: ${error} - ${errorDescription}`);
   }
 });
 

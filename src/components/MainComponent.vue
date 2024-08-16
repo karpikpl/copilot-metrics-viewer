@@ -9,6 +9,9 @@
       <h2 class="error-message"> {{ mockedDataMessage }} </h2>
       <v-spacer></v-spacer>
 
+      <!-- Conditionally render the logout button -->
+      <v-btn v-if="showLogoutButton" href="/logout" class="logout-button">Logout</v-btn>
+
       <template v-slot:extension>
         <v-tabs v-model="tab" align-tabs="title">
           <v-tab v-for="item in tabItems" :key="item" :value="item">
@@ -84,6 +87,9 @@ export default defineComponent({
     },
     mockedDataMessage() {
       return config.mockedData ? 'Using mock data - see README if unintended' : '';
+    },
+    showLogoutButton() {
+      return config.github.baseApi === '/api/github';
     }
   },
   data () {
@@ -186,5 +192,8 @@ export default defineComponent({
 }
 .error-message {
   color: red;
+}
+.logout-button {
+  margin-left: auto;
 }
 </style>
