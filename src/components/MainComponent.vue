@@ -5,7 +5,9 @@
         <v-icon>mdi-github</v-icon>
       </v-btn>
 
-      <v-toolbar-title class="toolbar-title">Copilot Metrics Viewer | {{ capitalizedItemName }} : {{ displayedViewName }}</v-toolbar-title>
+      <v-toolbar-title class="toolbar-title">Copilot Metrics Viewer | {{ capitalizedItemName }} : {{ displayedViewName }}  {{ teamName }}
+         
+      </v-toolbar-title>
       <h2 class="error-message"> {{ mockedDataMessage }} </h2>
       <v-spacer></v-spacer>
 
@@ -13,12 +15,15 @@
       <v-btn v-if="showLogoutButton" href="/logout" class="logout-button">Logout</v-btn>
 
       <template v-slot:extension>
+
         <v-tabs v-model="tab" align-tabs="title">
           <v-tab v-for="item in tabItems" :key="item" :value="item">
             {{ item }}
           </v-tab>
         </v-tabs>
+
       </template>
+
     </v-toolbar>
 
     <!-- API Error Message -->
@@ -48,6 +53,7 @@
 <script lang='ts'>
 import { defineComponent, ref } from 'vue'
 import { getMetricsApi } from '../api/GitHubApi';
+import { getTeamMetricsApi } from '../api/GitHubApi';
 import { getSeatsApi } from '../api/ExtractSeats';
 import { Metrics } from '../model/Metrics';
 import { Seat } from "../model/Seat";
@@ -85,6 +91,15 @@ export default defineComponent({
     isScopeOrganization() {
       return config.scope.type === 'organization';
     },
+    teamName(){
+      var teamName;
+      if (config.github.team && config.github.team.trim() !== '')  {
+        teamName = "| Team : " + config.github.team;
+      } else {
+        teamName = '';
+      }
+      return teamName;
+    },
     mockedDataMessage() {
       return config.mockedData ? 'Using mock data - see README if unintended' : '';
     },
@@ -118,35 +133,70 @@ export default defineComponent({
       // API Error Message
       const apiError = ref<string | undefined>(undefined);
 
-      getMetricsApi().then(data => {
+      
+      if(config.github.team && config.github.team.trim() !== '') {
+        getTeamMetricsApi().then(data => {
         metrics.value = data;
 
         // Set metricsReady to true after the call completes.
         metricsReady.value = true;
-          
+
       }).catch(error => {
-      console.log(error);
-      // Check the status code of the error response
-      if (error.response && error.response.status) {
-        switch (error.response.status) {
-          case 401:
-            apiError.value = '401 Unauthorized access Login to GitHub using this link <a href="/login">Login</a>.';
-            break;
-          case 404:
-            apiError.value = `404 Not Found - is the ${config.scope.type} '${config.scope.name}' correct?`;
-            break;
-          default:
-            apiError.value = error.message;
-            break;
+        console.log(error);
+        // Check the status code of the error response
+        if (error.response && error.response.status) {
+          switch (error.response.status) {
+            case 401:
+              apiError.value = '401 Unauthorized access - check if your token in the .env file is correct.';
+              break;
+            case 404:
+              apiError.value = `404 Not Found - is the ${config.scope.type} '${config.scope.name}' correct?`;
+              break;
+            default:
+              apiError.value = error.message;
+              break;
+          }
+        } else {
+          // Update apiError with the error message
+          apiError.value = error.message;
         }
-      } else {
-        // Update apiError with the error message
-        apiError.value = error.message;
+        // Add a new line to the apiError message
+        apiError.value += ' <br> If .env file is modified, restart the app for the changes to take effect.';
+          
+      });
       }
-       // Add a new line to the apiError message
-       apiError.value += ' <br> If .env file is modified, restart the app for the changes to take effect.';
-        
-    });
+
+      if (metricsReady.value === false) {
+        getMetricsApi().then(data => {
+          metrics.value = data;
+
+          // Set metricsReady to true after the call completes.
+          metricsReady.value = true;
+            
+        }).catch(error => {
+        console.log(error);
+        // Check the status code of the error response
+        if (error.response && error.response.status) {
+          switch (error.response.status) {
+            case 401:
+              apiError.value = '401 Unauthorized access - check if your token in the .env file is correct.';
+              break;
+            case 404:
+              apiError.value = `404 Not Found - is the ${config.scope.type} '${config.scope.name}' correct?`;
+              break;
+            default:
+              apiError.value = error.message;
+              break;
+          }
+        } else {
+          // Update apiError with the error message
+          apiError.value = error.message;
+        }
+        // Add a new line to the apiError message
+        apiError.value += ' <br> If .env file is modified, restart the app for the changes to take effect.';
+          
+      });
+    }
      
     getSeatsApi().then(data => {
         seats.value = data;
@@ -196,4 +246,5 @@ export default defineComponent({
 .logout-button {
   margin-left: auto;
 }
+
 </style>
