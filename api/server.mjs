@@ -116,7 +116,7 @@ app.get('/login', (req, res) => {
   // store the state in the session
   req.session.state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-  res.redirect(`https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${redirectUrl}&state=${req.session.state}&scope=read:org,manage_billing:copilot`);
+  res.redirect(`https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&state=${req.session.state}&redirect_uri=${redirectUrl}`);
 });
 
 app.get('/callback', async (req, res) => {
@@ -149,7 +149,7 @@ app.get('/callback', async (req, res) => {
     if (process.env.PUBLIC_APP) {
       // here when if we don't have the org - we take it from the user's orgs
 
-      const orgsResponse = await axios.get('https://api.github.com/user/orgs', {
+      const installationsResponse = await axios.get('https://api.github.com/user/installations', {
         headers: {
           Authorization: `token ${token}`,
           Accept: 'application/vnd.github+json',
@@ -157,17 +157,21 @@ app.get('/callback', async (req, res) => {
         }
       });
 
-      if(orgsResponse.status !== 200) {
-        res.send('Error fetching organizations');
+      if(installationsResponse.status !== 200) {
+        res.send('Error fetching installations');
         return;
       }
 
-      const organizations = orgsResponse.data;
+      const installations = installationsResponse.data.installations;
+      const organizations = installations.map(installation => installation.account.login);
+
       if (organizations.length > 0) {
-        const org = organizations[0].login; // Use the first organization login name
+        const org = organizations[0]; // Use the first organization login name
         req.session.org = org;
+        req.session.orgs = organizations;
       } else {
-        res.send('No organizations found - Install the app on an organization: '+ JSON.stringify(organizations) + ' - ' + token);
+
+        res.redirect(`https://github.com/apps/copilot-metrics-viewer`);
         return;
       }
     }
@@ -177,6 +181,11 @@ app.get('/callback', async (req, res) => {
   } else {
     res.send(`Authorized, but unable to exchange code ${code} for token.`);
   }
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/');
 });
 
 // All other requests to serve the Vue app
