@@ -1,4 +1,4 @@
-const PROPS = ["MOCKED_DATA", "SCOPE", "GITHUB_ORG", "GITHUB_ENT", "GITHUB_TEAM", "GITHUB_TOKEN"];
+const PROPS = ["MOCKED_DATA", "SCOPE", "GITHUB_ORGS", "GITHUB_ENT", "GITHUB_TEAMS", "GITHUB_TOKEN"];
 
 const env: any = {};
 PROPS.forEach(prop => {
@@ -19,7 +19,10 @@ if (VALID_SCOPE.includes(env.VUE_APP_SCOPE)) {
 }
 
 let apiUrl: string;
-const githubOrgName = env.VUE_APP_GITHUB_ORG;
+const orgs = env.VUE_APP_GITHUB_ORGS && env.VUE_APP_GITHUB_ORGS.split(',').map((org: string) => org.trim()) || [];
+const teams = env.VUE_APP_GITHUB_TEAMS && env.VUE_APP_GITHUB_TEAMS.split(',').map((team: string) => team.trim()) || []
+teams.unshift(''); // Add an empty value to the top of the teams array
+const githubOrgName = orgs.length > 0 ? orgs[0] : undefined;
 const githubEntName = env.VUE_APP_GITHUB_ENT;
 
 let scopeName: string;
@@ -44,7 +47,8 @@ const config: Config = {
 	github: {
 		org: githubOrgName,
 		ent: githubEntName,
-		team: env.VUE_APP_GITHUB_TEAM,
+		teams: teams,
+		orgs: orgs,
 		token: env.VUE_APP_GITHUB_TOKEN,
 		apiUrl
 	}
@@ -64,7 +68,8 @@ interface Config {
 	github: {
 		org: string;
 		ent: string;
-		team: string;
+		teams: string[];
+		orgs: string[];
 		token: string;
 		apiUrl: string;
 	}

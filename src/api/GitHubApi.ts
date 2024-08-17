@@ -50,12 +50,12 @@ export const getTeams = async (): Promise<string[]> => {
   return response.data;
 }
 
-export const getTeamMetricsApi = async (): Promise<Metrics[]> => {
-  console.log("config.github.team: " + config.github.team);
+export const getTeamMetricsApi = async (team: string): Promise<Metrics[]> => {
+  console.log("config.github.team: " + team);
 
-  if (config.github.team && config.github.team.trim() !== '') {
+  if (team && team.trim() !== '') {
     const response = await axios.get(
-      `${config.github.apiUrl}/team/${config.github.team}/copilot/usage`,
+      `${config.github.apiUrl}/team/${team}/copilot/usage`,
       {
         headers: {
           Accept: "application/vnd.github+json",
