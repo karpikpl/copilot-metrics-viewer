@@ -30,7 +30,7 @@ class github {
             if (response.status === 200) {
                 return response.data;
             } else {
-                console.log(response);
+                console.log(response.data);
                 return {};
             }
         } catch (error) {
@@ -84,21 +84,27 @@ class github {
     }
 
     async getTeams(token, org) {
-        const teamsResponse = await axios.get(`https://api.github.com/orgs/${org}/teams`, {
-            headers: {
-                Authorization: `token ${token}`,
-                Accept: 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28'
-            }
-        });
+        try {
+            const teamsResponse = await axios.get(`https://api.github.com/orgs/${org}/teams`, {
+                headers: {
+                    Authorization: `token ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                }
+            });
 
-        if (teamsResponse.status !== 200) {
-            console.error('Error in /orgs/{org}/teams:', teamsResponse.status);
+            if (teamsResponse.status !== 200) {
+                console.error('Error in /orgs/{org}/teams:', teamsResponse.status);
+                return [];
+            }
+
+            const teams = teamsResponse.data.map(team => team.slug);
+            return teams;
+        }
+        catch (error) {
+            console.error('Error in getTeams:', error);
             return [];
         }
-
-        const teams = teamsResponse.data.map(team => team.slug);
-        return teams;
     }
 }
 
