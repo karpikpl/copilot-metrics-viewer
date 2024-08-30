@@ -1,4 +1,6 @@
-const PROPS = ["MOCKED_DATA", "SCOPE", "GITHUB_ORGS", "GITHUB_ENT", "GITHUB_TEAMS", "GITHUB_TOKEN"];
+// default values
+const PROPS = ["MOCKED_DATA", "GITHUB_ORG", "GITHUB_ENT", "GITHUB_TEAM", "USE_PROXY"];
+
 
 const env: any = {};
 PROPS.forEach(prop => {
@@ -11,66 +13,97 @@ PROPS.forEach(prop => {
 	}
 });
 
-const VALID_SCOPE = ['organization', 'enterprise'];
-
-let scopeType;
-if (VALID_SCOPE.includes(env.VUE_APP_SCOPE)) {
-	scopeType = env.VUE_APP_SCOPE as 'enterprise' | 'organization'
-}
-
-let apiUrl: string;
-const orgs = env.VUE_APP_GITHUB_ORGS && env.VUE_APP_GITHUB_ORGS.split(',').map((org: string) => org.trim()) || [];
-const teams = env.VUE_APP_GITHUB_TEAMS && env.VUE_APP_GITHUB_TEAMS.split(',').map((team: string) => team.trim()) || []
-teams.unshift(''); // Add an empty value to the top of the teams array
-const githubOrgName = orgs.length > 0 ? orgs[0] : undefined;
-const githubEntName = env.VUE_APP_GITHUB_ENT;
-
-let scopeName: string;
-if (scopeType === 'organization') {
-	scopeName = githubOrgName;
-	apiUrl = `https://api.github.com/orgs/${githubOrgName}`;
-}
-else if (scopeType === 'enterprise') {
-	scopeName = githubEntName;
-	apiUrl = `https://api.github.com/enterprises/${githubEntName}`;
-}
-else {
-	throw new Error(`Invalid VUE_APP_SCOPE value: ${env.VUE_APP_SCOPE}. Valid values: ${VALID_SCOPE.join(', ')}`)
-}
+const defaultScope = env.VUE_APP_GITHUB_ORG ? 'organization' : env.VUE_APP_GITHUB_ENT ? 'enterprise' : '';
 
 const config: Config = {
 	mockedData: env.VUE_APP_MOCKED_DATA === "true",
 	scope: {
-		type: scopeType,
-		name: scopeName
+		type: defaultScope,
+		get name() {
+            switch (config.scope.type) {
+				case 'organization':
+					return config.github.org;
+				case 'enterprise':
+					return config.github.ent;
+				default:
+					return '';
+			}
+        }
 	},
 	github: {
-		org: githubOrgName,
-		ent: githubEntName,
-		teams: teams,
-		orgs: orgs,
+		org: env.VUE_APP_GITHUB_ORG,
+		ent: env.VUE_APP_GITHUB_ENT,
+		team: env.VUE_APP_GITHUB_TEAM,
 		token: env.VUE_APP_GITHUB_TOKEN,
-		apiUrl
+		get apiUrl() {
+			const baseApi = config.github.useProxy ? '/api/github' : 'https://api.github.com';
+
+			if (config.scope.type === 'organization') {
+				return `${baseApi || 'https://api.github.com'}/orgs/${config.github.org}`;
+			}
+			else if (config.scope.type === 'enterprise') {
+				return `${baseApi || 'https://api.github.com'}/enterprises/${config.github.ent}`;
+			}
+			return '';
+		},
+		useProxy: env.VUE_APP_USE_PROXY === "true"
+	},
+	get isValid () {
+		if (!config.scope.type) {
+			console.error('config.scope.type missing');
+			return false;
+		}
+		if (!config.github.org && !config.github.ent) {
+			console.error('org or enterprise needs to be provided');
+			return false;
+		}
+		if(config.mockedData || config.github.useProxy) {
+			// for mock data or proxy we don't need a token
+			return true;
+		} else if (!config.github.token) {
+			// we need the token for client-side requests
+			return false;
+		}
+		return true;
 	}
-}
-if (!config.mockedData && !config.github.token) {
-	throw new Error("VUE_APP_GITHUB_TOKEN environment variable must be set.");
 }
 
 export default config;
 
-interface Config {
+export interface Config {
 	mockedData: boolean;
 	scope: {
-		type: 'organization' | 'enterprise';
+		type: 'organization' | 'enterprise' | '';
+		/** The GitHub organization or enterprise name. */
 		name: string;
 	};
+	isValid: boolean;
 	github: {
-		org: string;
+		/** The GitHub organization name. */
+		org: string; 
+		/** The GitHub enterprise name. */
 		ent: string;
-		teams: string[];
-		orgs: string[];
+		/** The GitHub team name. */
+		team: string;
+		/** 
+		 * The GitHub token to authenticate requests. 
+		 * 
+		 * CAUTION: Do not expose the token in the client-side code.
+		 * */
 		token: string;
+		/**
+		 * Flag to use the proxy to hide the token or run 100% client-side.
+		 * 
+		 * When true data apiUrl uses `/api/github` and the token is sent via proxy to the GitHub API.
+		 * When false the token is sent from the client-side to the GitHub API https://api.github.com.
+		 * 
+		 */
+		useProxy: boolean;
+		/**
+		 * The base URL for the GitHub API. When set to `/api/github` it sends data via proxy to the GitHub API to hide the token.
+		 * 
+		 * default: https://api.github.com
+		 */
 		apiUrl: string;
 	}
 }
