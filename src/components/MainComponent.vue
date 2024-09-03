@@ -2,7 +2,9 @@
   <v-card>
     <v-toolbar color="indigo" elevation="4">
       <v-btn icon @click="$emit('toggle-drawer')">
-        <v-icon>mdi-menu</v-icon>
+        <v-icon :color="config.isValid ? 'default' : 'red'">
+          {{ config.isValid ? 'mdi-menu' : 'mdi-alert-circle' }}
+        </v-icon>
       </v-btn>
       <v-btn icon href="https://github.com/github-copilot-resources/copilot-metrics-viewer">
         <v-icon>mdi-github</v-icon>
@@ -17,8 +19,8 @@
       <template v-slot:extension>
 
         <v-tabs v-model="tab" align-tabs="title">
-          <v-tab v-for="item in tabItems" :key="item" :value="item">
-            {{ item }}
+          <v-tab v-for="item in tabItems" :key="item.key" :value="item.key">
+            {{ item.name }}
           </v-tab>
         </v-tabs>
 
@@ -29,16 +31,17 @@
     <!-- API Error Message -->
     <div v-if="apiError" class="error-message" v-html="apiError"></div>
     <div v-if="!apiError">
-      <v-progress-linear v-if="!metricsReady || !seatsReady || !config.isValid" indeterminate color="indigo"></v-progress-linear>
+      <v-progress-linear v-if="!metricsReady || !seatsReady || !config.isValid" indeterminate
+        color="indigo"></v-progress-linear>
       <v-window v-if="metricsReady" v-model="tab">
-        <v-window-item v-for="item in tabItems" :key="item" :value="item">
+        <v-window-item v-for="item in tabItems" :key="item.key" :value="item.key">
           <v-card flat>
-            <MetricsViewer v-if="item === itemName" :metrics="metrics" />
-            <BreakdownComponent v-if="item === 'languages'" :metrics="metrics" :breakdownKey="'language'" />
-            <BreakdownComponent v-if="item === 'editors'" :metrics="metrics" :breakdownKey="'editor'" />
-            <CopilotChatViewer v-if="item === 'copilot chat'" :metrics="metrics" />
-            <SeatsAnalysisViewer v-if="item === 'seat analysis'" :seats="seats" />
-            <ApiResponse v-if="item === 'api response'" :metrics="metrics" :seats="seats" />
+            <MetricsViewer v-if="item.name === itemName" :metrics="metrics" />
+            <BreakdownComponent v-if="item.name === 'languages'" :metrics="metrics" :breakdownKey="'language'" />
+            <BreakdownComponent v-if="item.name === 'editors'" :metrics="metrics" :breakdownKey="'editor'" />
+            <CopilotChatViewer v-if="item.name === 'copilot chat'" :metrics="metrics" />
+            <SeatsAnalysisViewer v-if="item.name === 'seat analysis'" :seats="seats" />
+            <ApiResponse v-if="item.name === 'api response'" :metrics="metrics" :seats="seats" />
           </v-card>
         </v-window-item>
       </v-window>
@@ -91,9 +94,6 @@ export default defineComponent({
     displayedViewName(): string {
       return this.config.scope.name;
     },
-    isScopeOrganization() {
-      return this.config.scope.type === 'organization';
-    },
     teamName() {
       var teamName;
       if (this.config.github.team && this.config.github.team.trim() !== '') {
@@ -105,24 +105,25 @@ export default defineComponent({
     },
     mockedDataMessage() {
       return this.config.mockedData ? 'Using mock data - see README if unintended' : '';
+    },
+    tabItems(): { name: string, key: string }[] {
+      switch (this.config.scope.type) {
+        case 'organization':
+          return [
+            { name: 'organization', key: 'metrics' }, { name: 'languages', key: 'lan' }, { name: 'editors', key: 'editors' }, { name: 'copilot chat', key: 'chat' }, { name: 'seat analysis', key: 'seats' }, { name: 'api response', key: 'api' }
+          ];
+        case 'enterprise':
+          return [
+            { name: 'enterprise', key: 'metrics' }, { name: 'languages', key: 'lan' }, { name: 'editors', key: 'editors' }, { name: 'copilot chat', key: 'chat' }, { name: 'api response', key: 'api' }
+          ];
+        default:
+          return [];
+      }
     }
   },
   data() {
     return {
-      tabItems: ['languages', 'editors', 'copilot chat', 'api response'],
       tab: null
-    }
-  },
-  created() {
-    this.tabItems.unshift(this.itemName);
-    if (this.config.scope.type === 'organization') {
-      // get the last item in the array,which is 'api response' 
-      //and add 'seat analysis' before it
-      let lastItem = this.tabItems.pop();
-      this.tabItems.push('seat analysis');
-      if (lastItem) {
-        this.tabItems.push(lastItem);
-      }
     }
   },
   setup(props) {
@@ -156,50 +157,29 @@ export default defineComponent({
       apiError.value += ' <br> If .env file is modified, restart the app for the changes to take effect.';
     }
 
-    if (props.config.github.team && props.config.github.team.trim() !== '') {
-      getTeamMetricsApi(props.config.github.team).then(data => {
-        metrics.value = data;
-
-        // Set metricsReady to true after the call completes.
-        metricsReady.value = true;
-
-      }).catch(handleErrors);
-    }
-
-    if (metricsReady.value === false) {
-      getMetricsApi().then(data => {
-        metrics.value = data;
-
-        // Set metricsReady to true after the call completes.
-        metricsReady.value = true;
-
-      }).catch(handleErrors);
-    }
-
-    getSeatsApi().then(data => {
-      seats.value = data;
-
-      // Set seatsReady to true after the call completes.
-      seatsReady.value = true;
-
-    }).catch(handleErrors);
-
     function refreshMain() {
+      metrics.value = [];
+      seats.value = [];
       metricsReady.value = false;
       seatsReady.value = false;
       apiError.value = undefined;
-      if (props.config.github.team && props.config.github.team.trim() !== '') {
-        getTeamMetricsApi(props.config.github.team).then(data => {
+
+      if(!props.config.github.org) {
+        return;
+      }
+
+      const metricsPromise = props.config.github.team && props.config.github.team.trim() !== '' 
+        ? getTeamMetricsApi(props.config.github.team) 
+        : getMetricsApi();
+
+      metricsPromise.then(data => {
           metrics.value = data;
           metricsReady.value = true;
         }).catch(handleErrors);
-      }
-      getMetricsApi().then(data => {
-        metrics.value = data;
-        metricsReady.value = true;
-      }).catch(handleErrors);
+
       getSeatsApi().then(data => {
         seats.value = data;
+        // Set seatsReady to true after the call completes.
         seatsReady.value = true;
       }).catch(handleErrors);
     }
@@ -213,6 +193,8 @@ export default defineComponent({
       console.log('MainComponent unmounted');
       window.removeEventListener('refresh-data', refreshMain);
     });
+
+    refreshMain();
 
     return { metricsReady, metrics, seatsReady, seats, apiError, refreshMain };
   }

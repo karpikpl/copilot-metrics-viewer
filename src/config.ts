@@ -19,16 +19,7 @@ const config: Config = {
 	mockedData: env.VUE_APP_MOCKED_DATA === "true",
 	scope: {
 		type: defaultScope,
-		get name() {
-            switch (config.scope.type) {
-				case 'organization':
-					return config.github.org;
-				case 'enterprise':
-					return config.github.ent;
-				default:
-					return '';
-			}
-        }
+		name: defaultScope === 'organization' ? env.VUE_APP_GITHUB_ORG : defaultScope === 'enterprise' ? env.VUE_APP_GITHUB_ENT : ''
 	},
 	github: {
 		org: env.VUE_APP_GITHUB_ORG,
@@ -50,11 +41,9 @@ const config: Config = {
 	},
 	get isValid () {
 		if (!config.scope.type) {
-			console.error('config.scope.type missing');
 			return false;
 		}
 		if (!config.github.org && !config.github.ent) {
-			console.error('org or enterprise needs to be provided');
 			return false;
 		}
 		if(config.mockedData || config.github.useProxy) {
@@ -77,6 +66,7 @@ export interface Config {
 		/** The GitHub organization or enterprise name. */
 		name: string;
 	};
+	//** Validation check for the configuration */
 	isValid: boolean;
 	github: {
 		/** The GitHub organization name. */

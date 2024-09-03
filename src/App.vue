@@ -9,72 +9,74 @@
       <v-divider></v-divider>
       <v-list density="comfortable">
 
-        <v-form v-model="isConfigFormValid">
-
-        <v-list-item>
-            <v-switch v-model="config.mockedData" :label="`Data: ${config.mockedData ? 'Mocked' : 'Real'}`"
-              inset></v-switch>
-        </v-list-item>
-
-        <div v-if="!config.mockedData">
+        <v-form v-model="isConfigFormValid" ref="configForm">
 
           <v-list-item>
-              <v-switch v-model="useToken" :label="`Authentication: ${useToken ? 'Using Token' : 'GitHub login'}`"
-                inset></v-switch>
+            <v-switch v-model="config.mockedData" :label="`Data: ${config.mockedData ? 'Mocked' : 'Real'}`"
+              inset></v-switch>
           </v-list-item>
 
-          <v-list-item v-if="useToken">
-              <v-text-field hide-details="auto" label="token" clearable :rules="[rules.required, rules.token]"
-               minLength="40"  maxlength="100" @input="debounce(() => { config.github.token = $event.target.value })"></v-text-field>
-          </v-list-item>
+          <div v-if="!config.mockedData">
 
-          <v-list-item v-if="!useToken">
+            <v-list-item>
+              <v-switch v-model="useToken" :label="`Authentication: ${useToken ? 'Using Token' : 'GitHub login'}`" inset
+                :disabled="!gitHubLoginEnabled"></v-switch>
+            </v-list-item>
+
+            <v-list-item v-if="useToken">
+              <v-text-field :append-inner-icon="tokenVisible ? 'mdi-eye-off' : 'mdi-eye'"
+                :type="tokenVisible ? 'text' : 'password'" @click:append-inner="tokenVisible = !tokenVisible"
+                hide-details="auto" label="token" clearable :rules="[rules.required, rules.token]" minLength="40"
+                maxlength="100" v-debounce:1s="tokenChanged" v-model="config.github.token"></v-text-field>
+            </v-list-item>
+
+            <v-list-item v-if="!useToken">
               <a href="/login" class="github-login-button">
                 <v-icon left>mdi-github</v-icon>
                 Sign in with GitHub
               </a>
-          </v-list-item>
+            </v-list-item>
 
-          <v-list-item>
+            <v-list-item>
               <v-switch v-model="isOrgSwitch" :label="`Scope: ${isOrgSwitch ? 'Organization' : 'Enterprise'}`"
                 inset></v-switch>
-          </v-list-item>
+            </v-list-item>
 
-          <v-list-item v-if="!isOrgSwitch" title="Provide the Enterprise">
+            <v-list-item v-if="!isOrgSwitch" title="Provide the Enterprise">
               <v-text-field hide-details="auto" label="Enterprise" clearable :rules="[rules.required, rules.counter]"
-                maxlength="60" @input="debounce(() => { config.github.ent = $event.target.value })"></v-text-field>
-          </v-list-item>
+                maxlength="60" v-debounce:1s="enterpriseChanged" v-model="config.github.ent"></v-text-field>
+            </v-list-item>
 
-          <v-list-item title="Select organization">
+            <v-list-item title="Select organization">
               <v-autocomplete :items="orgs" item-title="login" label="Organization" class="mx-4" solo
-                :allow-overflow="false" v-model="config.github.org" :loading="fetchingOrgs">
+                :allow-overflow="false" v-model="config.github.org" :loading="fetchingOrgs" :rules="[rules.required]">
                 <template v-slot:item="{ props, item }">
                   <v-list-item v-bind="props" :subtitle="item.raw.description"></v-list-item>
                 </template>
               </v-autocomplete>
-          </v-list-item>
+            </v-list-item>
 
-          <v-spacer></v-spacer>
+            <v-spacer></v-spacer>
 
-          <v-list-item title="Select Team">
+            <v-list-item title="Select Team">
               <v-autocomplete :items="orgs" item-title="login" label="Team filter" class="mx-4" solo clearable>
                 <template v-slot:item="{ props, item }">
                   <v-list-item v-bind="props" :subtitle="item.raw.description"></v-list-item>
                 </template>
               </v-autocomplete>
-          </v-list-item>
-        </div>
-  </v-form>
+            </v-list-item>
+          </div>
+        </v-form>
       </v-list>
     </v-navigation-drawer>
     <v-main>
-      <MainComponent :config="config" @toggle-drawer="toggleDrawer"/>
+      <MainComponent :config="config" @toggle-drawer="toggleDrawer" />
     </v-main>
   </v-app>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watch, computed} from 'vue'
+import { defineComponent, ref, watch } from 'vue'
 import MainComponent from './components/MainComponent.vue'
 import { getOrganizations, getOrganizationsForEnt, getTeams, Organization } from './api/GitHubApi';
 import configDefaults from './config';
@@ -90,12 +92,13 @@ export default defineComponent({
   data() {
     return {
       drawer: configDefaults.isValid,
+      tokenVisible: false,
       isOrgSwitch: configDefaults.scope.type === 'organization',
       useToken: !configDefaults.github.useProxy,
       rules: {
         required: (value: string) => !!value || 'Required.',
         counter: (value: string) => value.length <= 60 || 'Max 60 characters',
-        token: (value: string) => value.length >= 40 || value.length <= 100 || 'Token must be between 40 and 100 characters long'
+        token: (value: string) => (value.length >= 40 && value.length <= 100) || 'Token must be between 40 and 100 characters long'
       }
     }
   },
@@ -106,22 +109,18 @@ export default defineComponent({
     const selectedOrg = ref<string>(config.value.github.org);
     const orgs = ref<Organization[]>([]);
     const fetchingOrgs = ref<boolean>(false);
+    const configForm = ref<any | null>(null);
+    const gitHubLoginEnabled = ref<boolean>(config.value.github.useProxy);
+    configForm.value?.validate();
 
-    function createDebounce() {
-      let timeout : number | undefined;
-      return function (fnc: () => void, delayMs: number | undefined = 500) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          fnc();
-        }, delayMs || 500);
-      };
-    }
+    // watch mock data switch
     watch(
       () => config.value.mockedData,
       async (newVal, oldVal) => {
         if (newVal !== oldVal) {
-          
-          if(config.value.mockedData) {
+          configForm.value?.validate();
+
+          if (config.value.mockedData) {
             // Reset data
             orgs.value = [];
             config.value.github.org = 'octodemo';
@@ -130,39 +129,74 @@ export default defineComponent({
             refreshMain();
           }
           else {
-          // Reset data
-          orgs.value = [];
-          config.value.github.org = '';
-          config.value.github.ent = '';
+            // Reset data
+            orgs.value = [];
+            config.value.github.org = '';
+            config.value.github.ent = '';
 
-          // get orgs if we have a "valid" token
+            // get orgs if we have a "valid" token
             if (config.value.github.token && config.value.github.token.length >= 40) {
-              await getOrganizations();
+              await fetchOrganizations();
             }
           }
 
           console.log('config.mockedData changed', newVal);
           console.log('Configuration isValid flag is', config.value.isValid);
+          // todo: check if valid before calling refresh
+          refreshMain();
         }
       }
     );
+
+    async function tokenChanged(newVal: string) {
+      if (newVal && newVal.length >= 40) {
+        await fetchOrganizations();
+      }
+    }
 
     watch(
-      () => config.value.github.token,
-      async (newVal, oldVal) => {
-        if (newVal !== oldVal && newVal.length >= 40) {
-          console.log('config.github.token changed', newVal);
+      () => config.value.github.org,
+      async (newVal) => {
 
-         orgs.value = await getOrganizations();
+        console.log('selected new org', newVal);
+        console.log('config is valid:', config.value.isValid);
+
+
+        if (config.value.github.org == '<all>') {
+          // if all orgs are selected, we need to set the scope to the enterprise
+          config.value.scope.name = config.value.github.ent;
+        } else {
+          config.value.scope.name = config.value.github.org;
         }
+        refreshMain();
       }
     );
+
+
+    async function enterpriseChanged(newVal: string) {
+      config.value.github.ent = newVal;
+      console.log('selected new ent', newVal);
+      console.log('config is valid:', config.value.isValid);
+
+      await fetchOrganizations();
+
+      if (config.value.github.org == '<all>') {
+        // if all orgs are selected, we need to set the scope to the enterprise
+        config.value.scope.name = config.value.github.ent;
+      } else {
+        config.value.scope.name = config.value.github.org;
+      }
+      refreshMain();
+    }
 
     async function fetchOrganizations() {
       fetchingOrgs.value = true;
       const organizations = config.value.scope.type == 'organization' ? await getOrganizations() : await getOrganizationsForEnt(selectedEnterprise.value);
       fetchingOrgs.value = false;
-      return organizations;
+
+      // set first org as default
+      orgs.value = organizations;
+      config.value.github.org = organizations[0].login;
     }
 
     function refreshMain() {
@@ -176,10 +210,13 @@ export default defineComponent({
       selectedEnterprise,
       config,
       orgs,
-      debounce: createDebounce(),
       isConfigFormValid,
       fetchOrganizations,
       fetchingOrgs,
+      configForm,
+      gitHubLoginEnabled,
+      enterpriseChanged,
+      tokenChanged,
     }
   },
   methods: {
@@ -196,7 +233,7 @@ export default defineComponent({
       if (this.config.mockedData) {
         console.log('Mocked data - tell Main to refresh?');
       } else {
-        if(this.isConfigFormValid) {
+        if (this.isConfigFormValid) {
           console.log('Real data - get orgs');
         }
       }
@@ -204,36 +241,24 @@ export default defineComponent({
   },
   async mounted() {
     if (this.config.isValid) {
-      this.orgs = await this.fetchOrganizations();
+      await this.fetchOrganizations();
     }
   },
   watch: {
-    async selectedOrg(newVal, oldVal) {
-      if (newVal !== oldVal) {
-        console.log('selectedOrg', newVal);
-        // this.config.github.org = newVal;
-      }
-    },
     async selectedEnterprise(newVal, oldVal) {
       if (newVal !== oldVal) {
-        console.log('selectedEnterprise', newVal);
+        console.log('in watch.selectedEnterprise', newVal);
         // this.config.github.ent = newVal;
-        this.orgs = await this.fetchOrganizations();
+        await this.fetchOrganizations();
       }
     },
     async isOrgSwitch(newVal, oldVal) {
       if (newVal !== oldVal) {
         this.config.scope.type = this.isOrgSwitch ? 'organization' : 'enterprise';
+        this.config.github.org = '';
+        await this.fetchOrganizations();
       }
     },
-    async isValid(newVal, oldVal) {
-      console.log('config.isValid changed to ', newVal);
-      // if (newVal !== oldVal) {
-      //   if (newVal) {
-      //     this.orgs = await this.getOrganizations();
-      //   }
-      // }
-    }
   }
 
 

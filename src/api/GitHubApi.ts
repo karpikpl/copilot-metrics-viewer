@@ -98,8 +98,9 @@ export const getOrganizations = async (): Promise<Organization[]> => {
 
 export const getOrganizationsForEnt = async (ent: string): Promise<Organization[]> => {
 
+  // todo: make a graphql query to get the organizations for the enterprise
   return [
-    {login: '<none>', description: 'All organizations in the enterprise'},
+    {login: '<all>', description: 'All organizations in the enterprise'},
   ];
 }
 
