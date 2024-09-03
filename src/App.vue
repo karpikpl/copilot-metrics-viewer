@@ -59,9 +59,10 @@
             <v-spacer></v-spacer>
 
             <v-list-item title="Select Team">
-              <v-autocomplete :items="orgs" item-title="login" label="Team filter" class="mx-4" solo clearable>
+              <v-autocomplete :items="teams" item-title="slug" label="Team filter" class="mx-4" solo clearable
+              v-model="config.github.team">
                 <template v-slot:item="{ props, item }">
-                  <v-list-item v-bind="props" :subtitle="item.raw.description"></v-list-item>
+                  <v-list-item v-bind="props" :subtitle="item.raw.name"></v-list-item>
                 </template>
               </v-autocomplete>
             </v-list-item>
@@ -78,7 +79,7 @@
 <script lang="ts">
 import { defineComponent, ref, watch } from 'vue'
 import MainComponent from './components/MainComponent.vue'
-import { getOrganizations, getOrganizationsForEnt, getTeams, Organization } from './api/GitHubApi';
+import { getOrganizations, getOrganizationsForEnt, getTeams, Organization, Team } from './api/GitHubApi';
 import configDefaults from './config';
 import { Config } from './config';
 
@@ -108,7 +109,9 @@ export default defineComponent({
     const selectedEnterprise = ref<string>(config.value.github.ent);
     const selectedOrg = ref<string>(config.value.github.org);
     const orgs = ref<Organization[]>([]);
+    const teams = ref<Team[]>([]);
     const fetchingOrgs = ref<boolean>(false);
+    const fetchingTeams = ref<boolean>(false);
     const configForm = ref<any | null>(null);
     const gitHubLoginEnabled = ref<boolean>(config.value.github.useProxy);
     configForm.value?.validate();
@@ -123,6 +126,7 @@ export default defineComponent({
           if (config.value.mockedData) {
             // Reset data
             orgs.value = [];
+            teams.value = [];
             config.value.github.org = 'octodemo';
             config.value.github.ent = 'octodemo';
 
@@ -131,6 +135,7 @@ export default defineComponent({
           else {
             // Reset data
             orgs.value = [];
+            teams.value = [];
             config.value.github.org = '';
             config.value.github.ent = '';
 
@@ -160,7 +165,7 @@ export default defineComponent({
 
         console.log('selected new org', newVal);
         console.log('config is valid:', config.value.isValid);
-
+        teams.value = [];
 
         if (config.value.github.org == '<all>') {
           // if all orgs are selected, we need to set the scope to the enterprise
@@ -168,6 +173,22 @@ export default defineComponent({
         } else {
           config.value.scope.name = config.value.github.org;
         }
+
+        if(isConfigFormValid.value && config.value.isValid) {
+          // fetch teams but not wait
+          fetchTeams();
+        }
+
+        refreshMain();
+      }
+    );
+
+    watch(
+      () => config.value.github.team,
+      async (newVal) => {
+        console.log('selected new team', newVal);
+        console.log('config is valid:', config.value.isValid);
+
         refreshMain();
       }
     );
@@ -199,6 +220,14 @@ export default defineComponent({
       config.value.github.org = organizations[0].login;
     }
 
+    async function fetchTeams() {
+      fetchingTeams.value = true;
+      // todo: get teams for enterprise ? for selected org?
+      const teamsData = await getTeams();
+      fetchingTeams.value = false;
+      teams.value = teamsData;
+    }
+
     function refreshMain() {
       console.log('refreshMain');
       const event = new CustomEvent('refresh-data');
@@ -210,6 +239,7 @@ export default defineComponent({
       selectedEnterprise,
       config,
       orgs,
+      teams,
       isConfigFormValid,
       fetchOrganizations,
       fetchingOrgs,

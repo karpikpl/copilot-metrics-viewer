@@ -25,6 +25,11 @@ export interface Organization {
   description: string;
 }
 
+export interface Team {
+  slug: string;
+  name: string;
+}
+
 export const getMetricsApi = async (): Promise<Metrics[]> => {
 
   let response;
@@ -52,7 +57,15 @@ export const getMetricsApi = async (): Promise<Metrics[]> => {
   return metricsData;
 };
 
-export const getTeams = async (): Promise<string[]> => {
+export const getTeams = async (): Promise<Team[]> => {
+
+  if (config.mockedData) {
+    console.log("Using mock data. Check VUE_APP_MOCKED_DATA variable.");
+    return [
+      {slug: 'octoteam', name: 'GitHub Demo Team'},
+    ];
+  }
+
   const response = await axios.get(`${config.github.apiUrl}/teams`, {
     headers: {
       Accept: 'application/vnd.github+json',
